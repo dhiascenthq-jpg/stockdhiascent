@@ -42,7 +42,7 @@ function handle_(p) {
       case 'data':   return json_({ ok: true, data: getData_() });
       case 'record': return json_({ ok: true, result: record_(p) });
       case 'admin':  checkAdmin_(p.adminPin); return json_({ ok: true });
-      case 'dash':   checkAdmin_(p.adminPin); return json_({ ok: true, dash: getDash_(Number(p.days) || 14) });
+      case 'dash':   checkAdmin_(p.adminPin); return json_({ ok: true, dash: getDash_(p) });
       default:       throw new Error('Action tidak dikenali');
     }
   } catch (err) {
@@ -70,32 +70,45 @@ function checkAdmin_(pin) {
 }
 
 // ---------------------------------------------------------------- dashboard
-function getDash_(days) {
-  days = Math.min(Math.max(days, 7), 60);
+function getDash_(p) {
   const ss = ss_();
-  const today = new Date(Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd'T'00:00:00"));
-  const from = new Date(today.getTime() - (days - 1) * 86400000);
   const key = d => Utilities.formatDate(d, TZ, 'yyyy-MM-dd');
+  const addDays = (k, n) => { const d = new Date(k + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const isKey = k => /^\d{4}-\d{2}-\d{2}$/.test(String(k || ''));
+
+  // Julat tarikh: from/to (yyyy-MM-dd) atau days (lalai 14 hari hingga hari ini)
+  const today = key(new Date());
+  let to = isKey(p.to) ? p.to : today;
+  let from = isKey(p.from) ? p.from : addDays(to, -((Number(p.days) || 14) - 1));
+  if (from > to) { const t = from; from = to; to = t; }
+  if (addDays(from, 180) < to) from = addDays(to, -180);
+  let days = 0; for (let k = from; k <= to; k = addDays(k, 1)) days++;
 
   const rk = ss.getSheetByName('Rekod');
   const last = rk.getLastRow();
-  const rows = last > 1 ? rk.getRange(2, 1, last - 1, 9).getValues() : [];
+  const all = last > 1 ? rk.getRange(2, 1, last - 1, 9).getValues() : [];
 
-  // Set Sinaran: komponen tetap yang ditolak automatik
   const SET_PARTS = ['getaran-aura-ga', 'kasturi-kijang-kk'];
+  const SET_AUTO_DARI = '2026-11-12';   // mulai tarikh ini Set Sinaran tolak GA & KK automatik
 
-  const outBy = {}, inBy = {}, perDay = {}, returns = [], usedBy = {};
-  for (let i = 0; i < days; i++) perDay[key(new Date(from.getTime() + i * 86400000))] = 0;
+  const outBy = {}, inBy = {}, perDay = {}, returns = [], usedBy = {}, rows = [];
+  for (let k = from; k <= to; k = addDays(k, 1)) perDay[k] = 0;
 
-  rows.forEach(r => {
-    const d = r[1];
-    if (!(d instanceof Date) || d < from) return;
-    const k = key(d), step = r[2], id = r[3], q = Number(r[5]) || 0;
+  all.forEach(r => {
+    if (!(r[1] instanceof Date)) return;
+    const k = key(r[1]);
+    if (k < from || k > to) return;
+    const step = r[2], id = r[3], q = Number(r[5]) || 0;
+    if (step === 'Baki dilapor') return;
+    rows.push([k, step, id, q, String(r[7] || '').replace(/\s*\((app|sheet|pembetulan)\)\s*$/i, ''), String(r[8] || '')]);
     if (step === 'Stock out') {
-      const ids = id === 'set-sinaran' ? SET_PARTS : [id];
-      ids.forEach(x => outBy[x] = (outBy[x] || 0) + q);
-      if (id !== 'set-sinaran' && perDay[k] != null) perDay[k] += q;
-      if (id === 'set-sinaran') outBy['set-sinaran'] = (outBy['set-sinaran'] || 0) + q;
+      if (id === 'set-sinaran') {
+        outBy[id] = (outBy[id] || 0) + q;
+        if (k >= SET_AUTO_DARI) SET_PARTS.forEach(x => outBy[x] = (outBy[x] || 0) + q);
+      } else {
+        outBy[id] = (outBy[id] || 0) + q;
+        perDay[k] += q;
+      }
     } else if (step === 'Stock in') {
       inBy[id] = (inBy[id] || 0) + q;
     } else if (step === 'Guna bahan') {
@@ -105,7 +118,7 @@ function getDash_(days) {
     }
   });
 
-  // Penggunaan bahan ikut resepi = Stock in produk x kuantiti seunit
+  // Bahan ikut resepi = Stock in produk x kuantiti seunit
   const rs = ss.getSheetByName('Resepi');
   const rsRows = rs.getRange(2, 1, Math.max(rs.getLastRow() - 1, 1), 4).getValues();
   rsRows.forEach(r => {
@@ -113,19 +126,18 @@ function getDash_(days) {
     const made = inBy[r[0]] || 0;
     if (made) usedBy[r[2]] = (usedBy[r[2]] || 0) + made * (Number(r[3]) || 0);
   });
-  // Kotak Sinaran ditolak bila Set Sinaran keluar
-  if (outBy['set-sinaran']) usedBy['kotak-sinaran'] = (usedBy['kotak-sinaran'] || 0) + outBy['set-sinaran'];
+  rows.forEach(r => { if (r[1] === 'Stock out' && r[2] === 'set-sinaran' && r[0] >= SET_AUTO_DARI) usedBy['kotak-sinaran'] = (usedBy['kotak-sinaran'] || 0) + r[3]; });
 
-  const avg = {};
+  const avg = {}, avgUse = {};
   Object.keys(outBy).forEach(id => avg[id] = outBy[id] / days);
-  const avgUse = {};
   Object.keys(usedBy).forEach(id => avgUse[id] = usedBy[id] / days);
 
   return {
-    days: days, from: key(from), to: key(today),
+    days: days, from: from, to: to, today: today,
     perDay: Object.keys(perDay).map(k => ({ date: k, out: perDay[k] })),
     outBy: outBy, inBy: inBy, avgOut: avg, avgUse: avgUse,
-    returns: returns.slice(-20)
+    returns: returns.slice(-20),
+    rows: rows   // [tarikh, langkah, id, kuantiti, oleh, nota]
   };
 }
 
