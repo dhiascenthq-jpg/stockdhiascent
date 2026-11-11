@@ -210,8 +210,8 @@ label.f{display:block;font-size:13px;color:var(--muted);margin:0 0 6px}
         <div style="height:8px"></div>
         <button class="btn ghost" id="logout">Log keluar (kunci dengan PIN)</button>
       </div>
-      <div class="card">
-        <b>Mod admin</b>
+      <div class="card hidden" id="adminCard">
+        <b>Dashboard</b>
         <p class="muted" id="adminText">Buka Dashboard stok (perlu PIN admin).</p>
         <button class="btn gold" id="adminBtn">Buka mod admin</button>
       </div>
@@ -299,7 +299,7 @@ function toast(msg, err){
 async function load(silent){
   const b=$('#refreshBtn'); b.innerHTML='<span class="spin"></span>';
   try{
-    const j=await call('data'); D=j.data; store.set('data',D); renderAll();
+    const j=await call('data'); D=j.data; store.set('data',D); renderAll(); setAdminUI();
     if(isAdmin() && !$('#tab-dash').classList.contains('hidden')) loadDash();
     if(!silent) toast('Data dikemas kini');
   }catch(e){
@@ -330,7 +330,7 @@ function pickWho(){
   $('#whoList').innerHTML=(D&&D.staff||[]).map(s=>
     `<button class="btn ghost" style="margin-bottom:8px;text-align:left" data-n="${esc(s.name)}"><b>${esc(s.name)}</b> <span class="muted">· ${esc(s.role)}</span></button>`).join('');
   $$('#whoList button').forEach(b=>b.onclick=()=>{ store.set('me',b.dataset.n); show('app'); renderAll(); setAdminUI();
-    if(/admin/i.test(b.dataset.n) && !isAdmin()) adminLogin(); });
+    if(canDash() && !isAdmin()) adminLogin(); });
 }
 
 // ---------------------------------------------------------- render
@@ -468,16 +468,20 @@ function review(){
 
 // ---------------------------------------------------------- admin dashboard
 let dashDays = 14, DASH = null;
-const isAdmin = () => !!store.get('adminPin','');
+const isAdmin = () => !!store.get('adminPin','') && canDash();
+function canDash(){ const me=store.get('me',''); return !!(D&&D.staff||[]).find(s=>s.name===me&&s.dash); }
 function setAdminUI(){
+  if(!canDash() && store.get('adminPin','')) store.del('adminPin');
+  $('#adminCard').classList.toggle('hidden',!canDash());
   const on=isAdmin();
   $('#dashTabBtn').classList.toggle('hidden',!on);
-  $('#adminBtn').textContent=on?'Tutup mod admin':'Buka mod admin';
-  $('#adminText').textContent=on?'Mod admin aktif di telefon ini. Tab Dashboard dipaparkan.':'Buka Dashboard stok (perlu PIN admin).';
+  $('#adminBtn').textContent=on?'Tutup Dashboard':'Buka Dashboard';
+  $('#adminText').textContent=on?'Dashboard aktif di telefon ini.':'Masukkan PIN admin untuk buka Dashboard stok.';
 }
 async function adminLogin(){
   if(isAdmin()){ store.del('adminPin'); setAdminUI(); tab('rekod'); toast('Mod admin ditutup'); return; }
-  const pin=prompt('Masukkan PIN admin');
+  if(!canDash()){ toast('Nama ini tiada akses Dashboard',true); return; }
+  const pin=prompt('Masukkan PIN admin untuk buka Dashboard');
   if(!pin) return;
   try{ await call('admin',{adminPin:pin}); store.set('adminPin',pin); setAdminUI(); tab('dash'); loadDash(); }
   catch(e){ toast(e.message,true); }
@@ -569,7 +573,7 @@ $('#submitBtn').onclick=review;
 $('#refreshBtn').onclick=()=>load(false);
 $('#pinBtn').onclick=tryPin;
 $('#pin').onkeydown=e=>{ if(e.key==='Enter') tryPin(); };
-$('#switchUser').onclick=()=>{ store.del('me'); pickWho(); };
+$('#switchUser').onclick=()=>{ store.del('me'); store.del('adminPin'); setAdminUI(); tab('rekod'); pickWho(); };
 $('#logout').onclick=logout;
 $('#adminBtn').onclick=adminLogin;
 $$('#dashSeg button').forEach(b=>b.onclick=()=>{ dashDays=+b.dataset.v; loadDash(); });

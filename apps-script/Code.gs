@@ -155,8 +155,9 @@ function getData_() {
   }));
 
   const st = ss.getSheetByName('Staff');
-  const staff = st.getRange(2, 1, Math.max(st.getLastRow() - 1, 1), 2).getValues()
-    .filter(r => r[0]).map(r => ({ name: r[0], role: r[1] }));
+  // Lajur D "Dashboard" = Ya: staf ini nampak butang Dashboard (masih perlu PIN admin)
+  const staff = st.getRange(2, 1, Math.max(st.getLastRow() - 1, 1), 4).getValues()
+    .filter(r => r[0]).map(r => ({ name: r[0], role: r[1], dash: String(r[3]).trim().toLowerCase() === 'ya' }));
 
   const rk = ss.getSheetByName('Rekod');
   const last = rk.getLastRow();
