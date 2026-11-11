@@ -93,6 +93,23 @@ label.f{display:block;font-size:13px;color:var(--muted);margin:0 0 6px}
 .sum{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f0ebe3;font-size:15px}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid #fff;border-right-color:transparent;border-radius:50%;animation:s .7s linear infinite;vertical-align:-3px;margin-right:6px}
 @keyframes s{to{transform:rotate(360deg)}}
+.alert{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid #f0ebe3;align-items:flex-start}
+.alert:last-child{border-bottom:0}
+.alert .dot{width:10px;height:10px;border-radius:50%;margin-top:6px;flex:none}
+.alert .dot.r{background:var(--bad)}.alert .dot.y{background:#d99a1e}.alert .dot.g{background:#a9a2b3}
+.alert b{font-size:15px;display:block}.alert span{font-size:13px;color:var(--muted)}
+.cov{height:6px;border-radius:3px;background:#efe9df;overflow:hidden;margin-top:6px}
+.cov i{display:block;height:100%;border-radius:3px}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);text-align:right;font-weight:600;padding:6px 4px}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.tbl td{white-space:nowrap;padding:9px 4px;border-top:1px solid #f0ebe3;text-align:right;font-variant-numeric:tabular-nums}
+.tbl td:first-child{font-weight:600;white-space:normal}
+.r{color:var(--bad)}.y{color:#b07a10}
+.bars{display:flex;align-items:flex-end;gap:3px;height:120px;padding-top:8px}
+.bars div{flex:1;background:var(--ink);border-radius:4px 4px 0 0;min-height:2px;position:relative}
+.bars div.today{background:var(--gold)}
+.barlbl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px}
 .install{display:flex;gap:10px;align-items:center}
 </style>
 </head>
@@ -122,6 +139,23 @@ label.f{display:block;font-size:13px;color:var(--muted);margin:0 0 6px}
     <button id="refreshBtn" aria-label="Muat semula">↻</button>
   </header>
   <main>
+    <!-- DASHBOARD (admin) -->
+    <section id="tab-dash" class="hidden">
+      <div class="seg" id="dashSeg">
+        <button data-v="7">7 hari</button><button data-v="14" class="on">14 hari</button><button data-v="30">30 hari</button>
+      </div>
+      <div class="kpis" id="dashKpis"></div>
+      <h3>Amaran</h3>
+      <div class="card" id="dashAlerts"></div>
+      <h3>Stock out sehari</h3>
+      <div class="card"><div class="bars" id="dashBars"></div><div class="barlbl" id="dashBarLbl"></div></div>
+      <h3>Produk ready · cukup untuk berapa hari</h3>
+      <div class="card" style="padding:6px 12px"><table class="tbl" id="dashProd"></table></div>
+      <h3>Bahan · cukup untuk berapa hari</h3>
+      <div class="card" style="padding:6px 12px"><table class="tbl" id="dashBahan"></table></div>
+      <p class="muted center" id="dashNote"></p>
+    </section>
+
     <!-- REKOD -->
     <section id="tab-rekod">
       <div class="card">
@@ -176,6 +210,11 @@ label.f{display:block;font-size:13px;color:var(--muted);margin:0 0 6px}
         <div style="height:8px"></div>
         <button class="btn ghost" id="logout">Log keluar (kunci dengan PIN)</button>
       </div>
+      <div class="card">
+        <b>Mod admin</b>
+        <p class="muted" id="adminText">Buka Dashboard stok (perlu PIN admin).</p>
+        <button class="btn gold" id="adminBtn">Buka mod admin</button>
+      </div>
       <div class="card" id="installCard">
         <b>Pasang app di telefon</b>
         <p class="muted" id="installText">iPhone: buka dalam Safari → butang Share → <b>Add to Home Screen</b>.<br>Android: Chrome → ⋮ → <b>Install app</b> / <b>Add to Home screen</b>.</p>
@@ -196,6 +235,7 @@ label.f{display:block;font-size:13px;color:var(--muted);margin:0 0 6px}
   </main>
 
   <nav class="tabs" id="tabs">
+    <button data-t="dash" id="dashTabBtn" class="hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Dashboard</button>
     <button data-t="rekod" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Rekod</button>
     <button data-t="baki"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>Baki</button>
     <button data-t="sejarah"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Sejarah</button>
@@ -260,6 +300,7 @@ async function load(silent){
   const b=$('#refreshBtn'); b.innerHTML='<span class="spin"></span>';
   try{
     const j=await call('data'); D=j.data; store.set('data',D); renderAll();
+    if(isAdmin() && !$('#tab-dash').classList.contains('hidden')) loadDash();
     if(!silent) toast('Data dikemas kini');
   }catch(e){
     if(/PIN/.test(e.message)){ logout(); return; }
@@ -269,7 +310,7 @@ async function load(silent){
 
 // ---------------------------------------------------------- screens
 function show(id){ ['login','who','app'].forEach(x=>$('#'+x).classList.toggle('hidden',x!==id)); }
-function logout(){ store.del('pin'); show('login'); $('#pin').value=''; }
+function logout(){ store.del('pin'); store.del('adminPin'); afterLogin.done=false; show('login'); $('#pin').value=''; }
 
 async function tryPin(){
   const pin=$('#pin').value.trim(); $('#pinErr').textContent='';
@@ -281,13 +322,15 @@ async function tryPin(){
 }
 function afterLogin(){
   if(!store.get('me','')) return pickWho();
-  show('app'); renderAll();
+  show('app'); renderAll(); setAdminUI();
+  if(isAdmin() && !afterLogin.done){ afterLogin.done=true; tab('dash'); }
 }
 function pickWho(){
   show('who');
   $('#whoList').innerHTML=(D&&D.staff||[]).map(s=>
     `<button class="btn ghost" style="margin-bottom:8px;text-align:left" data-n="${esc(s.name)}"><b>${esc(s.name)}</b> <span class="muted">· ${esc(s.role)}</span></button>`).join('');
-  $$('#whoList button').forEach(b=>b.onclick=()=>{ store.set('me',b.dataset.n); show('app'); renderAll(); });
+  $$('#whoList button').forEach(b=>b.onclick=()=>{ store.set('me',b.dataset.n); show('app'); renderAll(); setAdminUI();
+    if(/admin/i.test(b.dataset.n) && !isAdmin()) adminLogin(); });
 }
 
 // ---------------------------------------------------------- render
@@ -423,11 +466,100 @@ function review(){
   };
 }
 
+// ---------------------------------------------------------- admin dashboard
+let dashDays = 14, DASH = null;
+const isAdmin = () => !!store.get('adminPin','');
+function setAdminUI(){
+  const on=isAdmin();
+  $('#dashTabBtn').classList.toggle('hidden',!on);
+  $('#adminBtn').textContent=on?'Tutup mod admin':'Buka mod admin';
+  $('#adminText').textContent=on?'Mod admin aktif di telefon ini. Tab Dashboard dipaparkan.':'Buka Dashboard stok (perlu PIN admin).';
+}
+async function adminLogin(){
+  if(isAdmin()){ store.del('adminPin'); setAdminUI(); tab('rekod'); toast('Mod admin ditutup'); return; }
+  const pin=prompt('Masukkan PIN admin');
+  if(!pin) return;
+  try{ await call('admin',{adminPin:pin}); store.set('adminPin',pin); setAdminUI(); tab('dash'); loadDash(); }
+  catch(e){ toast(e.message,true); }
+}
+async function loadDash(){
+  if(!isAdmin()) return;
+  $('#dashNote').textContent='Memuatkan…';
+  try{
+    const j=await call('dash',{adminPin:store.get('adminPin',''),days:dashDays});
+    DASH=j.dash; renderDash();
+  }catch(e){
+    if(/PIN admin/.test(e.message)){ store.del('adminPin'); setAdminUI(); }
+    $('#dashNote').textContent=''; toast(e.message,true);
+  }
+}
+function cover(baki,avg){ return (baki==null||!avg)?null:baki/avg; }
+function covCls(d){ return d==null?'':d<7?'r':d<14?'y':''; }
+function covTxt(d){ return d==null?'—':d>=999?'999+':Math.floor(d)+' hari'; }
+function renderDash(){
+  if(!D||!DASH) return;
+  $$('#dashSeg button').forEach(b=>b.classList.toggle('on',+b.dataset.v===dashDays));
+  const prods=D.produk.filter(p=>!/ikut order/i.test(p.group));
+  const unit=prods.reduce((a,p)=>a+(p.baki||0),0);
+  const val=prods.reduce((a,p)=>a+(p.baki||0)*(p.price||0),0);
+
+  // ---- amaran
+  const A=[]; const now=new Date();
+  prods.forEach(p=>{
+    const avg=DASH.avgOut[p.id]||0, c=cover(p.baki,avg);
+    if(p.baki!=null&&p.baki<=0) A.push({l:'r',t:p.name+' habis',s:'Baki '+fmt(p.baki)+' — perlu refill segera'});
+    else if(c!=null&&c<7) A.push({l:'r',t:p.name+' tinggal ~'+Math.floor(c)+' hari',s:'Baki '+fmt(p.baki)+' · keluar ~'+avg.toFixed(1)+'/hari'});
+    else if(c!=null&&c<14) A.push({l:'y',t:p.name+' tinggal ~'+Math.floor(c)+' hari',s:'Baki '+fmt(p.baki)+' · keluar ~'+avg.toFixed(1)+'/hari'});
+  });
+  D.bahan.forEach(b=>{
+    const avg=DASH.avgUse[b.id]||0, c=cover(b.baki,avg);
+    if(b.status==='Negatif, semak') A.push({l:'r',t:b.name+' negatif ('+fmt(b.baki)+')',s:'Rekod tak tepat — buat Kira stok'});
+    else if(b.status==='PERLU BELI') A.push({l:'y',t:'Perlu beli: '+b.name,s:'Baki '+fmt(b.baki)+' '+(b.unit||'')+' · minimum '+fmt(b.min)+(c!=null?' · cukup ~'+covTxt(c):'')});
+    else if(c!=null&&c<14&&b.baki>0) A.push({l:'y',t:b.name+' cukup ~'+covTxt(c),s:'Baki '+fmt(b.baki)+' · guna ~'+avg.toFixed(1)+'/hari'});
+    else if(b.status==='Belum dikira') A.push({l:'g',t:b.name+' belum dikira',s:'Masukkan Kira stok supaya baki diketahui'});
+  });
+  D.produk.concat(D.bahan).forEach(x=>{
+    if(!x.countDate) return; const age=(now-new Date(x.countDate))/864e5;
+    if(age>30) A.push({l:'g',t:x.name+' — kiraan lama',s:'Kiraan terakhir '+x.countDate+' ('+Math.floor(age)+' hari lepas)'});
+  });
+  (DASH.returns||[]).forEach(r=>{ if(r.qty>=50) A.push({l:'r',t:'Masuk balik '+fmt(r.qty)+' · '+r.name,s:r.date+' oleh '+r.by+' — nampak macam baki, bukan return. Semak!'}); });
+  const order={r:0,y:1,g:2}; A.sort((a,b)=>order[a.l]-order[b.l]);
+  const red=A.filter(a=>a.l==='r').length, yel=A.filter(a=>a.l==='y').length;
+  $('#dashKpis').innerHTML=`<div class="kpi"><b>${fmt(unit)}</b><span>unit ready</span></div>
+    <div class="kpi"><b>RM${val>=1000?(val/1000).toFixed(1)+'k':fmt(val)}</b><span>nilai jualan</span></div>
+    <div class="kpi"><b class="${red?'r':yel?'y':''}">${red+yel}</b><span>amaran</span></div>`;
+  $('#dashAlerts').innerHTML=A.length?A.map(a=>`<div class="alert"><i class="dot ${a.l}"></i><div><b>${esc(a.t)}</b><span>${esc(a.s)}</span></div></div>`).join('')
+    :'<p class="muted center">✓ Tiada amaran. Semua stok mencukupi.</p>';
+
+  // ---- graf stock out sehari
+  const pd=DASH.perDay||[]; const mx=Math.max(1,...pd.map(x=>x.out));
+  $('#dashBars').innerHTML=pd.map((x,i)=>`<div class="${i===pd.length-1?'today':''}" style="height:${Math.max(2,x.out/mx*100)}%" title="${x.date}: ${x.out}"></div>`).join('');
+  const tot=pd.reduce((a,x)=>a+x.out,0);
+  $('#dashBarLbl').innerHTML=`<span>${esc(DASH.from.slice(5))}</span><span>Jumlah ${fmt(tot)} · purata ${fmt(Math.round(tot/DASH.days))}/hari</span><span>${esc(DASH.to.slice(5))}</span>`;
+
+  // ---- jadual produk
+  const pr=prods.map(p=>({p,avg:DASH.avgOut[p.id]||0})).map(o=>Object.assign(o,{c:cover(o.p.baki,o.avg)}))
+    .sort((a,b)=>(a.c==null?1e9:a.c)-(b.c==null?1e9:b.c));
+  $('#dashProd').innerHTML='<tr><th>Produk</th><th>Baki</th><th>Keluar/hari</th><th>Cukup</th></tr>'+pr.map(o=>{
+    const w=o.c==null?100:Math.min(100,o.c/30*100), col=o.c==null?'#cfc8d8':o.c<7?'var(--bad)':o.c<14?'#d99a1e':'var(--ok)';
+    return `<tr><td>${esc(o.p.name)}<div class="cov"><i style="width:${w}%;background:${col}"></i></div></td><td>${fmt(o.p.baki)}</td><td>${o.avg?o.avg.toFixed(1):'—'}</td><td class="${covCls(o.c)}">${covTxt(o.c)}</td></tr>`;}).join('');
+  const sets=DASH.outBy['set-sinaran']||0;
+
+  // ---- jadual bahan
+  const bh=D.bahan.filter(b=>b.baki!=null).map(b=>({b,avg:DASH.avgUse[b.id]||0})).map(o=>Object.assign(o,{c:cover(o.b.baki,o.avg)}))
+    .sort((a,b)=>{ const s=x=>x.b.status==='Negatif, semak'?-2:x.b.status==='PERLU BELI'?-1:0; return s(a)-s(b)||((a.c==null?1e9:a.c)-(b.c==null?1e9:b.c)); });
+  $('#dashBahan').innerHTML='<tr><th>Bahan</th><th>Baki</th><th>Guna/hari</th><th>Cukup</th></tr>'+bh.map(o=>{
+    const st=o.b.status==='PERLU BELI'?' <span class="pill buy">beli</span>':o.b.status==='Negatif, semak'?' <span class="pill neg">neg</span>':'';
+    return `<tr><td>${esc(o.b.name)}${st}</td><td>${fmt(o.b.baki)}</td><td>${o.avg?o.avg.toFixed(1):'—'}</td><td class="${covCls(o.c)}">${covTxt(o.c)}</td></tr>`;}).join('');
+  $('#dashNote').textContent=`Purata dikira dari rekod ${DASH.from} hingga ${DASH.to}.`+(sets?` Set Sinaran keluar: ${fmt(sets)} set.`:'')+' Merah < 7 hari, kuning < 14 hari.';
+}
+
 // ---------------------------------------------------------- wiring
 function tab(t){
   $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
-  ['rekod','baki','sejarah','lagi'].forEach(x=>$('#tab-'+x).classList.toggle('hidden',x!==t));
+  ['dash','rekod','baki','sejarah','lagi'].forEach(x=>$('#tab-'+x).classList.toggle('hidden',x!==t));
   window.scrollTo(0,0);
+  if(t==='dash') loadDash();
 }
 $$('#tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.t));
 $$('#bakiSeg button').forEach(b=>b.onclick=()=>{bakiView=b.dataset.v; renderBaki();});
@@ -439,6 +571,8 @@ $('#pinBtn').onclick=tryPin;
 $('#pin').onkeydown=e=>{ if(e.key==='Enter') tryPin(); };
 $('#switchUser').onclick=()=>{ store.del('me'); pickWho(); };
 $('#logout').onclick=logout;
+$('#adminBtn').onclick=adminLogin;
+$$('#dashSeg button').forEach(b=>b.onclick=()=>{ dashDays=+b.dataset.v; loadDash(); });
 $('#modal').onclick=e=>{ if(e.target.id==='modal') $('#modal').classList.add('hidden'); };
 $('#by').onchange=()=>store.set('me',$('#by').value);
 $('#date').value=today();

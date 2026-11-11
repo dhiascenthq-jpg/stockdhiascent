@@ -2,6 +2,8 @@
 // Dhiascent Stok — API untuk app telefon (GitHub Pages)
 // Projek Apps Script BERASINGAN. Ia baca & tulis sheet "Dhiascent Stok Operasi".
 //
+// PIN admin (untuk Dashboard): tab Tetapan, baris "PIN admin".
+//
 // LANGKAH PASANG (sekali sahaja):
 //  1) Buka script.google.com > New project. Namakan "Dhiascent Stok API".
 //  2) Padam kod contoh, tampal SEMUA kod fail ini. Save.
@@ -39,6 +41,8 @@ function handle_(p) {
       case 'ping':   return json_({ ok: true });
       case 'data':   return json_({ ok: true, data: getData_() });
       case 'record': return json_({ ok: true, result: record_(p) });
+      case 'admin':  checkAdmin_(p.adminPin); return json_({ ok: true });
+      case 'dash':   checkAdmin_(p.adminPin); return json_({ ok: true, dash: getDash_(Number(p.days) || 14) });
       default:       throw new Error('Action tidak dikenali');
     }
   } catch (err) {
@@ -54,6 +58,75 @@ function ss_() { return SpreadsheetApp.openById(SHEET_ID); }
 function checkPin_(pin) {
   const set = ss_().getSheetByName('Tetapan').getRange('B2').getDisplayValue().trim();
   if (set && String(pin || '').trim() !== set) throw new Error('PIN salah');
+}
+
+// PIN admin: tab Tetapan, baris berlabel "PIN admin" (lajur B)
+function checkAdmin_(pin) {
+  const vals = ss_().getSheetByName('Tetapan').getRange('A1:B20').getDisplayValues();
+  const row = vals.find(r => String(r[0]).trim().toLowerCase() === 'pin admin');
+  const set = row ? String(row[1]).trim() : '';
+  if (!set) throw new Error('PIN admin belum diset dalam tab Tetapan');
+  if (String(pin || '').trim() !== set) throw new Error('PIN admin salah');
+}
+
+// ---------------------------------------------------------------- dashboard
+function getDash_(days) {
+  days = Math.min(Math.max(days, 7), 60);
+  const ss = ss_();
+  const today = new Date(Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd'T'00:00:00"));
+  const from = new Date(today.getTime() - (days - 1) * 86400000);
+  const key = d => Utilities.formatDate(d, TZ, 'yyyy-MM-dd');
+
+  const rk = ss.getSheetByName('Rekod');
+  const last = rk.getLastRow();
+  const rows = last > 1 ? rk.getRange(2, 1, last - 1, 9).getValues() : [];
+
+  // Set Sinaran: komponen tetap yang ditolak automatik
+  const SET_PARTS = ['getaran-aura-ga', 'kasturi-kijang-kk'];
+
+  const outBy = {}, inBy = {}, perDay = {}, returns = [], usedBy = {};
+  for (let i = 0; i < days; i++) perDay[key(new Date(from.getTime() + i * 86400000))] = 0;
+
+  rows.forEach(r => {
+    const d = r[1];
+    if (!(d instanceof Date) || d < from) return;
+    const k = key(d), step = r[2], id = r[3], q = Number(r[5]) || 0;
+    if (step === 'Stock out') {
+      const ids = id === 'set-sinaran' ? SET_PARTS : [id];
+      ids.forEach(x => outBy[x] = (outBy[x] || 0) + q);
+      if (id !== 'set-sinaran' && perDay[k] != null) perDay[k] += q;
+      if (id === 'set-sinaran') outBy['set-sinaran'] = (outBy['set-sinaran'] || 0) + q;
+    } else if (step === 'Stock in') {
+      inBy[id] = (inBy[id] || 0) + q;
+    } else if (step === 'Guna bahan') {
+      usedBy[id] = (usedBy[id] || 0) + q;
+    } else if (step === 'Masuk balik') {
+      returns.push({ date: k, id: id, name: r[4], qty: q, by: r[7] });
+    }
+  });
+
+  // Penggunaan bahan ikut resepi = Stock in produk x kuantiti seunit
+  const rs = ss.getSheetByName('Resepi');
+  const rsRows = rs.getRange(2, 1, Math.max(rs.getLastRow() - 1, 1), 4).getValues();
+  rsRows.forEach(r => {
+    if (!r[0] || !r[2]) return;
+    const made = inBy[r[0]] || 0;
+    if (made) usedBy[r[2]] = (usedBy[r[2]] || 0) + made * (Number(r[3]) || 0);
+  });
+  // Kotak Sinaran ditolak bila Set Sinaran keluar
+  if (outBy['set-sinaran']) usedBy['kotak-sinaran'] = (usedBy['kotak-sinaran'] || 0) + outBy['set-sinaran'];
+
+  const avg = {};
+  Object.keys(outBy).forEach(id => avg[id] = outBy[id] / days);
+  const avgUse = {};
+  Object.keys(usedBy).forEach(id => avgUse[id] = usedBy[id] / days);
+
+  return {
+    days: days, from: key(from), to: key(today),
+    perDay: Object.keys(perDay).map(k => ({ date: k, out: perDay[k] })),
+    outBy: outBy, inBy: inBy, avgOut: avg, avgUse: avgUse,
+    returns: returns.slice(-20)
+  };
 }
 
 function fmtDate_(v) {
