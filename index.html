@@ -110,6 +110,26 @@ input[type=date].input{min-width:0;-webkit-appearance:none;appearance:none;min-h
 .bars{display:flex;align-items:flex-end;gap:3px;height:120px;padding-top:8px}
 .bars div{flex:1;background:var(--ink);border-radius:4px 4px 0 0;min-height:2px;position:relative}
 .bars div.today{background:var(--gold)}
+.pimg{width:44px;height:44px;border-radius:12px;flex:none;object-fit:cover;background:#f1ece4}
+.pimg.sm{width:26px;height:26px;border-radius:8px;vertical-align:middle;margin-right:8px}
+.pimg.lg{width:112px;height:112px;border-radius:28px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:10px;margin-bottom:6px}
+.pcard{background:#fff;border:1px solid var(--line);border-radius:18px;padding:10px;text-align:left;display:flex;flex-direction:column;gap:6px;transition:transform .12s,box-shadow .12s;position:relative}
+.pcard:active{transform:scale(.96)}
+@media(hover:hover){.pcard:hover{box-shadow:0 6px 18px rgba(33,26,44,.10);transform:translateY(-2px)}}
+.pcard .pimg{width:100%;height:auto;aspect-ratio:1;border-radius:14px}
+.pcard .pn{font-weight:600;font-size:13px;line-height:1.25}
+.pcard .pb{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.pcard .pb small{font-size:12px;font-weight:400;color:var(--muted);margin-left:3px}
+.pcard .pill{position:absolute;top:16px;right:16px}
+.stat{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}
+.stat div{background:var(--paper);border-radius:12px;padding:10px}
+.stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.stat span{font-size:12px;color:var(--muted)}
+.qa{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.qa .btn{padding:12px 6px;font-size:14px}
+@keyframes flash{0%{background:var(--gold2)}100%{background:transparent}}
+.item.flash{animation:flash 1.6s ease-out;border-radius:12px}
+.item .pimg{transition:transform .15s}.item.filled .pimg{transform:scale(1.08)}
 .chips{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
 .chips button{flex:none;border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 14px;font-size:14px;color:var(--ink2)}
 .chips button.on{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:600}
@@ -308,6 +328,9 @@ const store = {
   del(k){ try{ localStorage.removeItem('dhia_'+k);}catch(e){} }
 };
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const PHOTOS = (window.DHIA_CONFIG||{}).PHOTOS || {};
+const pimgSrc = id => PHOTOS[id] || ((D&&D.produk||[]).some(p=>p.id===id) ? 'icons/produk/'+id+'.svg' : null);
+const pimg = (id,cls) => { const s=pimgSrc(id); return s ? `<img class="pimg ${cls||''}" src="${esc(s)}" alt="" loading="lazy">` : ''; };
 const fmt = n => n==null||n==='' ? '—' : Number(n).toLocaleString('en-MY');
 const today = () => { const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
 
@@ -416,7 +439,7 @@ function renderItems(){
   list.forEach(x=>{
     if(x.group!==grp){ grp=x.group; html+=`<h3>${esc(grp)}</h3>`; }
     const v=qty[x.id]; const filled=v!==undefined&&v!=='';
-    html+=`<div class="item ${filled?'filled':''}" data-id="${esc(x.id)}">
+    html+=`<div class="item ${filled?'filled':''}" data-id="${esc(x.id)}">${pimg(x.id)}
       <div class="nm"><b>${esc(x.name)}</b><span>Baki: ${fmt(x.baki)}${x.unit?' '+esc(x.unit):''}</span></div>
       <div class="qty"><button data-a="-" aria-label="kurang">−</button>
       <input type="number" inputmode="numeric" min="0" step="any" value="${filled?esc(v):''}" placeholder="0">
@@ -460,6 +483,19 @@ function renderBaki(){
       <div class="kpi"><b>${D.bahan.length}</b><span>bahan</span></div>`;
   }
   let html='',grp=null;
+  if(bakiView==='produk'){
+    list.forEach(x=>{
+      if(x.group!==grp){ if(grp!==null) html+='</div>'; grp=x.group; html+=`<h3>${esc(grp)}</h3><div class="pgrid">`; }
+      const order=/ikut order/i.test(x.group);
+      html+=`<button class="pcard" data-pid="${esc(x.id)}">${pimg(x.id)}${order?'<span class="pill na">ikut order</span>':''}
+        <span class="pn">${esc(x.name)}</span><span class="pb">${order?'—':fmt(x.baki)}<small>${order?'':'unit'}</small></span></button>`;
+    });
+    if(grp!==null) html+='</div>';
+    $('#bakiList').innerHTML=html;
+    $$('#bakiList .pcard').forEach(b=>b.onclick=()=>openProduct(b.dataset.pid));
+    $('#bakiNote').textContent='Tekan produk untuk butiran & rekod pantas.';
+    return;
+  }
   list.forEach(x=>{
     if(x.group!==grp){ if(grp!==null) html+='</div>'; grp=x.group; html+=`<h3>${esc(grp)}</h3><div class="card" style="padding:4px 14px">`; }
     let pill='';
@@ -481,6 +517,40 @@ function renderLog(){
     <div class="q">${fmt(r.qty)}</div></div>`).join('')||'<p class="muted center">Tiada rekod</p>';
 }
 
+// ---------------------------------------------------------- produk: butiran & rekod pantas
+function openProduct(id){
+  const p=(D.produk||[]).find(x=>x.id===id); if(!p) return;
+  const order=/ikut order/i.test(p.group);
+  const rec=(D.recent||[]).filter(r=>r.id===id).slice(0,6);
+  $('#sheet').innerHTML=`<div style="display:flex;gap:14px;align-items:center">${pimg(id,'lg')}
+      <div><h2 style="margin:0">${esc(p.name)}</h2><p class="muted" style="margin:4px 0 0">${esc(p.group)} · RM${fmt(p.price)}</p></div></div>
+    <div class="stat">
+      <div><b>${order?'—':fmt(p.baki)}</b><span>baki ready</span></div>
+      <div><b>${order?'—':'RM'+fmt((p.baki||0)*(p.price||0))}</b><span>nilai stok</span></div>
+      <div><b>${fmt(p.out)}</b><span>keluar sejak kiraan</span></div>
+      <div><b>${fmt(p.in)}</b><span>refill sejak kiraan</span></div>
+    </div>
+    <p class="muted" style="margin:0 0 12px">Kiraan terakhir: <b>${fmt(p.count)}</b> pada ${esc(p.countDate||'—')}${order?' · Set dibuat ikut order':''}</p>
+    <div class="qa">
+      <button class="btn" data-go="Stock out">Stock out</button>
+      ${order?'':'<button class="btn gold" data-go="Stock in">Stock in</button><button class="btn ghost" data-go="Kira stok">Kira stok</button>'}
+    </div>
+    ${rec.length?'<h3>Rekod terkini</h3>'+rec.map(r=>`<div class="sum"><span><span class="tag">${esc(r.step)}</span>${esc(r.date)} · ${esc(r.by)}</span><b>${fmt(r.qty)}</b></div>`).join(''):''}
+    <div style="height:12px"></div><button class="btn ghost" id="cancelBtn">Tutup</button>`;
+  $('#modal').classList.remove('hidden');
+  $('#cancelBtn').onclick=()=>$('#modal').classList.add('hidden');
+  $$('#sheet [data-go]').forEach(b=>b.onclick=()=>{ $('#modal').classList.add('hidden'); goRecord(b.dataset.go,id); });
+}
+function goRecord(k,id){
+  const ns=STEPS.find(s=>s.k===k); if(!ns) return;
+  if(ns.k!==step.k) qty={};
+  step=ns; $('#itemSearch').value=''; tab('rekod'); renderSteps(); renderItems();
+  const row=document.querySelector(`#items .item[data-id="${CSS.escape(id)}"]`);
+  if(row){ row.scrollIntoView({behavior:'smooth',block:'center'}); row.classList.add('flash');
+    setTimeout(()=>{ const i=row.querySelector('input'); if(i) i.focus({preventScroll:true}); },450);
+    setTimeout(()=>row.classList.remove('flash'),1700); }
+}
+
 // ---------------------------------------------------------- submit
 function review(){
   const all=itemsFor(step.kind); const byId={}; all.forEach(x=>byId[x.id]=x);
@@ -496,7 +566,7 @@ function review(){
     warn+=`<div class="hint">Set Sinaran ×${fmt(set.qty)}: app akan tolak ${fmt(set.qty)} Getaran Aura, ${fmt(set.qty)} Kasturi Kijang &amp; ${fmt(set.qty)} Kotak Sinaran. Pastikan perfume 11ml pilihan customer juga diisi.</div>`;
   if(date!==today()) warn+=`<div class="hint">Tarikh rekod: <b>${esc(date)}</b> (bukan hari ini).</div>`;
   $('#sheet').innerHTML=`<h2>${esc(step.k)}</h2><p class="muted" style="margin-top:-6px">${esc(date)} · ${esc(by)}</p>
-    ${rows.map(r=>`<div class="sum"><span>${esc(r.name)}</span><b>${fmt(r.qty)}</b></div>`).join('')}
+    ${rows.map(r=>`<div class="sum"><span>${pimg(r.id,'sm')}${esc(r.name)}</span><b>${fmt(r.qty)}</b></div>`).join('')}
     ${$('#note').value?`<p class="muted">Nota: ${esc($('#note').value)}</p>`:''}
     ${warn}<div style="height:14px"></div>
     <button class="btn" id="sendBtn">Sahkan &amp; hantar</button><div style="height:8px"></div>
@@ -627,7 +697,7 @@ function renderDash(){
     .sort((a,b)=>(a.c==null?1e9:a.c)-(b.c==null?1e9:b.c));
   $('#dashProd').innerHTML='<tr><th>Produk</th><th>Baki</th><th>Keluar/hari</th><th>Cukup</th></tr>'+pr.map(o=>{
     const w=o.c==null?100:Math.min(100,o.c/30*100), col=o.c==null?'#cfc8d8':o.c<7?'var(--bad)':o.c<14?'#d99a1e':'var(--ok)';
-    return `<tr><td>${esc(o.p.name)}<div class="cov"><i style="width:${w}%;background:${col}"></i></div></td><td>${fmt(o.p.baki)}</td><td>${o.avg?o.avg.toFixed(1):'—'}</td><td class="${covCls(o.c)}">${covTxt(o.c)}</td></tr>`;}).join('');
+    return `<tr><td>${pimg(o.p.id,'sm')}${esc(o.p.name)}<div class="cov"><i style="width:${w}%;background:${col}"></i></div></td><td>${fmt(o.p.baki)}</td><td>${o.avg?o.avg.toFixed(1):'—'}</td><td class="${covCls(o.c)}">${covTxt(o.c)}</td></tr>`;}).join('');
   // ---- jadual bahan
   const bh=D.bahan.filter(b=>b.baki!=null).map(b=>({b,avg:DASH.avgUse[b.id]||0})).map(o=>Object.assign(o,{c:cover(o.b.baki,o.avg)}))
     .sort((a,b)=>{ const s=x=>x.b.status==='Negatif, semak'?-2:x.b.status==='PERLU BELI'?-1:0; return s(a)-s(b)||((a.c==null?1e9:a.c)-(b.c==null?1e9:b.c)); });
@@ -683,7 +753,7 @@ function renderDay(){
     const by=[...new Set(rows.map(r=>r[4]).filter(Boolean))].join(', ');
     const tot=Object.values(agg).reduce((a,b)=>a+b,0);
     return `<h3 style="margin-top:12px">${esc(st)} · ${fmt(tot)} <span style="text-transform:none;letter-spacing:0">oleh ${esc(by||'—')}</span></h3>`+
-      Object.keys(agg).sort((a,b)=>agg[b]-agg[a]).map(id=>`<div class="sum"><span>${esc(nameOf(id))}</span><b>${fmt(agg[id])}</b></div>`).join('');
+      Object.keys(agg).sort((a,b)=>agg[b]-agg[a]).map(id=>`<div class="sum"><span>${pimg(id,'sm')}${esc(nameOf(id))}</span><b>${fmt(agg[id])}</b></div>`).join('');
   }).join('');
 }
 // ---- carta 2: donut ikut kumpulan
@@ -732,7 +802,7 @@ function drawProd(R){
   if(!ids.length){ box.innerHTML='<p class="muted center">Tiada stock out dalam tempoh ini.</p>'; return; }
   const max=s[ids[0]];
   box.innerHTML=ids.map(id=>{ const g=GROUPS.find(x=>x.k===grpOf(id));
-    return `<div class="hbar"><span class="hl">${esc(nameOf(id))}</span><span class="ht"><i style="width:${Math.max(2,s[id]/max*100)}%;background:${g.c}"></i></span><b>${fmt(s[id])}</b></div>`; }).join('');
+    return `<div class="hbar"><span class="hl">${pimg(id,'sm')}${esc(nameOf(id))}</span><span class="ht"><i style="width:${Math.max(2,s[id]/max*100)}%;background:${g.c}"></i></span><b>${fmt(s[id])}</b></div>`; }).join('');
 }
 
 // ---------------------------------------------------------- wiring

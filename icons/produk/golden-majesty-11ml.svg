@@ -1,0 +1,3 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".35" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><rect width="120" height="120" rx="26" fill="#f8efd6"/><rect x="48" y="14" width="24" height="16" rx="4" fill="#211a2c"/><rect x="53" y="28" width="14" height="8" fill="#3a3048"/>
+<rect x="30" y="36" width="60" height="72" rx="14" fill="#d4a52c"/><rect x="30" y="36" width="60" height="72" rx="14" fill="url(#g)"/>
+<rect x="38" y="62" width="44" height="26" rx="5" fill="#fff" opacity=".92"/><text x="60" y="80" text-anchor="middle" font-family="Georgia,serif" font-size="15" font-weight="700" fill="#211a2c">GM</text></svg>

@@ -1,0 +1,3 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".35" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><rect width="120" height="120" rx="26" fill="#f6efe1"/><rect x="18" y="40" width="84" height="50" rx="18" fill="#e9d8b4"/><rect x="18" y="40" width="84" height="22" rx="14" fill="#fff" opacity=".35"/>
+<text x="60" y="73" text-anchor="middle" font-family="Georgia,serif" font-size="16" font-weight="700" fill="#5b4520">SEGAK</text>
+<circle cx="88" cy="32" r="6" fill="#fff" opacity=".8"/><circle cx="98" cy="22" r="4" fill="#fff" opacity=".7"/><circle cx="78" cy="22" r="3" fill="#fff" opacity=".7"/></svg>
