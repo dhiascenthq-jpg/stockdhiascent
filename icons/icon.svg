@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#211a2c"/>
+  <g fill="none" stroke="#d9b45e" stroke-width="22" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="196" y="96" width="120" height="54" rx="14"/>
+    <path d="M226 150v34h60v-34"/>
+    <path d="M176 196h160c22 0 40 18 40 40v152c0 22-18 40-40 40H176c-22 0-40-18-40-40V236c0-22 18-40 40-40z"/>
+  </g>
+  <text x="256" y="368" text-anchor="middle" font-family="Georgia, serif" font-size="150" font-weight="700" fill="#f3e7cc">D</text>
+</svg>
