@@ -293,11 +293,11 @@ input[type=date].input{min-width:0;-webkit-appearance:none;appearance:none;min-h
         <b>Cara rekod yang betul</b>
         <ul class="muted" style="padding-left:18px;margin:8px 0 0">
           <li><b>Stock out</b> — produk diambil untuk packing.</li>
-          <li><b>Set Sinaran</b> — rekod jumlah set. App tolak sendiri GA, KK &amp; Kotak Sinaran. Perfume 11ml pilihan customer rekod berasingan.</li>
+          <li><b>Set Sinaran</b> — rekod jumlah set. App tolak sendiri GA, KK, Kotak Sinaran &amp; Fridge magnet. Perfume 11ml pilihan customer rekod berasingan.</li>
           <li><b>Stock in</b> — refill siap masuk stor. Bahan (botol, pati, sticker) ditolak automatik ikut resepi, <b>jangan</b> rekod Guna bahan lagi.</li>
           <li><b>Masuk balik</b> — return pelanggan sahaja. <b>Bukan baki.</b></li>
           <li><b>Kira stok</b> — kiraan fizikal. Buat selepas semua rekod hari itu dimasukkan.</li>
-          <li><b>Guna bahan</b> — rosak, packing, fridge magnet gift.</li>
+          <li><b>Guna bahan</b> — rosak &amp; bahan packing. Fridge magnet untuk Set Sinaran tak perlu direkod.</li>
         </ul>
       </div>
     </section>
@@ -336,15 +336,15 @@ const today = () => { const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimez
 
 const STEPS = [
   {k:'Stock out',   t:'Stock out',    s:'Ambil untuk packing', kind:'produk',
-   hint:'Set Sinaran: isi jumlah set sahaja — GA, KK & Kotak Sinaran ditolak automatik. Perfume 11ml yang customer pilih, isi pada bau itu.'},
+   hint:'Set Sinaran: isi jumlah set sahaja — GA, KK, Kotak Sinaran & Fridge magnet ditolak automatik. Perfume 11ml yang customer pilih, isi pada bau itu.'},
   {k:'Stock in',    t:'Stock in',     s:'Refill siap masuk stor', kind:'produk',
    hint:'Botol, pati, sticker & kotak ditolak automatik ikut resepi. Jangan rekod Guna bahan untuk refill ini.'},
   {k:'Masuk balik', t:'Masuk balik',  s:'Return pelanggan', kind:'produk', warn:true,
    hint:'RETURN PELANGGAN SAHAJA. Jangan isi baki stor di sini — untuk baki guna "Kira stok".'},
   {k:'Kira stok',   t:'Kira stok',    s:'Kiraan fizikal', kind:'semua', warn:true,
    hint:'Isi jumlah sebenar yang dikira. Baki app akan reset kepada nombor ini. Buat selepas semua rekod hari ini dimasukkan.'},
-  {k:'Guna bahan',  t:'Guna bahan',   s:'Rosak / packing / gift', kind:'bahan',
-   hint:'Untuk bahan rosak, bahan packing (flyers, parcel, cellotape) dan Fridge magnet gift.'},
+  {k:'Guna bahan',  t:'Guna bahan',   s:'Rosak / packing', kind:'bahan',
+   hint:'Untuk bahan rosak dan bahan packing (flyers, parcel, cellotape). Fridge magnet untuk Set Sinaran ditolak automatik.'},
   {k:'Terima bahan',t:'Terima bahan', s:'Barang dari supplier', kind:'bahan',
    hint:'Rekod setiap kali bahan baru sampai supaya baki bahan betul.'}
 ];
@@ -563,7 +563,7 @@ function review(){
     warn='<div class="hint warn">Ada item yang stock out lebih dari baki app. Semak semula kuantiti.</div>';
   const set=rows.find(r=>r.id==='set-sinaran');
   if(step.k==='Stock out' && set)
-    warn+=`<div class="hint">Set Sinaran ×${fmt(set.qty)}: app akan tolak ${fmt(set.qty)} Getaran Aura, ${fmt(set.qty)} Kasturi Kijang &amp; ${fmt(set.qty)} Kotak Sinaran. Pastikan perfume 11ml pilihan customer juga diisi.</div>`;
+    warn+=`<div class="hint">Set Sinaran ×${fmt(set.qty)}: app akan tolak ${fmt(set.qty)} Getaran Aura, ${fmt(set.qty)} Kasturi Kijang, ${fmt(set.qty)} Kotak Sinaran &amp; ${fmt(set.qty)} Fridge magnet. Pastikan perfume 11ml pilihan customer juga diisi.</div>`;
   if(date!==today()) warn+=`<div class="hint">Tarikh rekod: <b>${esc(date)}</b> (bukan hari ini).</div>`;
   $('#sheet').innerHTML=`<h2>${esc(step.k)}</h2><p class="muted" style="margin-top:-6px">${esc(date)} · ${esc(by)}</p>
     ${rows.map(r=>`<div class="sum"><span>${pimg(r.id,'sm')}${esc(r.name)}</span><b>${fmt(r.qty)}</b></div>`).join('')}
