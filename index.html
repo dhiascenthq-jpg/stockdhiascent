@@ -294,6 +294,7 @@ input[type=date].input{min-width:0;-webkit-appearance:none;appearance:none;min-h
         <ul class="muted" style="padding-left:18px;margin:8px 0 0">
           <li><b>Stock out</b> — produk diambil untuk packing.</li>
           <li><b>Set Sinaran</b> — rekod jumlah set. App tolak sendiri GA, KK, Kotak Sinaran &amp; Fridge magnet. Perfume 11ml pilihan customer rekod berasingan.</li>
+          <li><b>KK 5 in 1</b> — rekod jumlah pakej. App tolak sendiri 5 botol KK &amp; 1 kotak bagi setiap pakej. Botol KK satu-satu rekod pada Kasturi Kijang.</li>
           <li><b>Stock in</b> — refill siap masuk stor. Bahan (botol, pati, sticker) ditolak automatik ikut resepi, <b>jangan</b> rekod Guna bahan lagi.</li>
           <li><b>Masuk balik</b> — return pelanggan sahaja. <b>Bukan baki.</b></li>
           <li><b>Kira stok</b> — kiraan fizikal. Buat selepas semua rekod hari itu dimasukkan.</li>
@@ -336,7 +337,7 @@ const today = () => { const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimez
 
 const STEPS = [
   {k:'Stock out',   t:'Stock out',    s:'Ambil untuk packing', kind:'produk',
-   hint:'Set Sinaran: isi jumlah set sahaja — GA, KK, Kotak Sinaran & Fridge magnet ditolak automatik. Perfume 11ml yang customer pilih, isi pada bau itu.'},
+   hint:'Set Sinaran: isi jumlah set sahaja — GA, KK, Kotak Sinaran & Fridge magnet ditolak automatik. Perfume 11ml yang customer pilih, isi pada bau itu. KK 5 in 1: isi jumlah pakej — 5 KK & 1 kotak ditolak automatik.'},
   {k:'Stock in',    t:'Stock in',     s:'Refill siap masuk stor', kind:'produk',
    hint:'Botol, pati, sticker & kotak ditolak automatik ikut resepi. Jangan rekod Guna bahan untuk refill ini.'},
   {k:'Masuk balik', t:'Masuk balik',  s:'Return pelanggan', kind:'produk', warn:true,
@@ -559,8 +560,12 @@ function review(){
   let warn='';
   if(step.k==='Masuk balik' && rows.some(r=>r.baki!=null && r.qty>=Math.max(50,r.baki*0.5)))
     warn='<div class="hint warn">Nombor ni nampak macam BAKI stor, bukan return. Kalau nak rekod baki, guna "Kira stok".</div>';
-  if(step.k==='Stock out' && rows.some(r=>r.id!=='set-sinaran' && r.baki!=null && r.qty>r.baki))
+  const isOrd=id=>/ikut order/i.test(((D.produk||[]).find(p=>p.id===id)||{}).group||'');
+  if(step.k==='Stock out' && rows.some(r=>!isOrd(r.id) && r.baki!=null && r.qty>r.baki))
     warn='<div class="hint warn">Ada item yang stock out lebih dari baki app. Semak semula kuantiti.</div>';
+  const kk5=rows.find(r=>r.id==='kk-5in1');
+  if(step.k==='Stock out' && kk5)
+    warn+=`<div class="hint">KK 5 in 1 ×${fmt(kk5.qty)}: app akan tolak ${fmt(kk5.qty*5)} botol Kasturi Kijang &amp; ${fmt(kk5.qty)} Kotak K.Kijang.</div>`;
   const set=rows.find(r=>r.id==='set-sinaran');
   if(step.k==='Stock out' && set)
     warn+=`<div class="hint">Set Sinaran ×${fmt(set.qty)}: app akan tolak ${fmt(set.qty)} Getaran Aura, ${fmt(set.qty)} Kasturi Kijang, ${fmt(set.qty)} Kotak Sinaran &amp; ${fmt(set.qty)} Fridge magnet. Pastikan perfume 11ml pilihan customer juga diisi.</div>`;
@@ -591,7 +596,7 @@ const GROUPS = [
   {k:'Phero 11ml', c:'#211a2c', t:g=>/11ml/i.test(g)},
   {k:'Phero 3ml',  c:'#b8913f', t:g=>/3ml/i.test(g)},
   {k:'Lain-lain',  c:'#7c6a9a', t:g=>!/11ml|3ml|set/i.test(g)},
-  {k:'Set Sinaran',c:'#2f7d55', t:g=>/set/i.test(g)}
+  {k:'Set / pakej',c:'#2f7d55', t:g=>/set/i.test(g)}
 ];
 const isAdmin = () => !!store.get('adminPin','') && canDash();
 function canDash(){ const me=store.get('me',''); return !!(D&&D.staff||[]).find(s=>s.name===me&&s.dash); }
@@ -635,6 +640,15 @@ async function loadDash(){
 function cover(baki,avg){ return (baki==null||!avg)?null:baki/avg; }
 function covCls(d){ return d==null?'':d<7?'r':d<14?'y':''; }
 function covTxt(d){ return d==null?'—':d>=999?'999+':Math.floor(d)+' hari'; }
+function isOrderId(id){ const p=(D.produk||[]).find(x=>x.id===id); return !!p&&/ikut order/i.test(p.group); }
+// KK 5 in 1: setiap pakej = 5 botol KK + 1 kotak K.Kijang (dikira di sini supaya server tak perlu diubah)
+function adjustPacks(){
+  if(!DASH||DASH._adj) return; DASH._adj=true;
+  const packs=(DASH.rows||[]).filter(r=>r[1]==='Stock out'&&r[2]==='kk-5in1').reduce((a,r)=>a+r[3],0);
+  if(!packs) return;
+  DASH.avgOut['kasturi-kijang-kk']=(DASH.avgOut['kasturi-kijang-kk']||0)+5*packs/DASH.days;
+  DASH.avgUse['kotak-kk']=(DASH.avgUse['kotak-kk']||0)+packs/DASH.days;
+}
 function grpOf(id){ const p=(D.produk||[]).find(x=>x.id===id); return p?GROUPS.find(g=>g.t(p.group)).k:null; }
 function nameOf(id){ const x=(D.produk||[]).concat(D.bahan||[]).find(x=>x.id===id); return x?x.name:id; }
 const SVGNS='http://www.w3.org/2000/svg';
@@ -643,6 +657,7 @@ function svgEl(tag,attrs,parent){ const e=document.createElementNS(SVGNS,tag); f
 
 function renderDash(){
   if(!D||!DASH) return;
+  adjustPacks();
   const R=DASH.rows||[];
   $('#dashFrom').value=DASH.from; $('#dashTo').value=DASH.to;
   $('#dashRange').textContent=(DASH.from===DASH.to?dFmt(DASH.from,{weekday:'long',year:'numeric'}):dFmt(DASH.from)+' – '+dFmt(DASH.to,{year:'numeric'}))+' · '+DASH.days+' hari';
@@ -684,11 +699,11 @@ function renderDash(){
   const price={}; D.produk.forEach(p=>price[p.id]=p.price||0);
   let out=0,inn=0,rm=0,sets=0;
   R.forEach(r=>{ const [k,st,id,q]=r;
-    if(st==='Stock out'&&price[id]!==undefined){ if(id==='set-sinaran') sets+=q; else { out+=q; rm+=q*price[id]; } }
+    if(st==='Stock out'&&price[id]!==undefined){ if(isOrderId(id)) sets+=q; else { out+=q; rm+=q*price[id]; } }
     if(st==='Stock in'&&price[id]!==undefined) inn+=q; });
   $('#dashKpis2').innerHTML=`<div class="kpi"><b>${fmt(out)}</b><span>unit stock out</span></div>
     <div class="kpi"><b>${fmt(inn)}</b><span>unit refill</span></div>
-    <div class="kpi"><b>RM${rm>=1000?(rm/1000).toFixed(1)+'k':fmt(rm)}</b><span>nilai keluar${sets?' · '+fmt(sets)+' set':''}</span></div>`;
+    <div class="kpi"><b>RM${rm>=1000?(rm/1000).toFixed(1)+'k':fmt(rm)}</b><span>nilai keluar${sets?' · '+fmt(sets)+' set/pakej':''}</span></div>`;
 
   drawDaily(R); drawDonut(R); drawInOut(R); drawProd(R); renderDay();
 
@@ -780,7 +795,7 @@ function drawInOut(R){
   const days=[]; for(let k=DASH.from;k<=DASH.to;k=dAdd(k,1)) days.push(k);
   const price={}; D.produk.forEach(p=>price[p.id]=1);
   const o={},n={}; days.forEach(k=>{o[k]=0;n[k]=0;});
-  R.forEach(([k,st,id,q])=>{ if(price[id]===undefined||id==='set-sinaran'||o[k]===undefined) return; if(st==='Stock out') o[k]+=q; if(st==='Stock in') n[k]+=q; });
+  R.forEach(([k,st,id,q])=>{ if(price[id]===undefined||isOrderId(id)||o[k]===undefined) return; if(st==='Stock out') o[k]+=q; if(st==='Stock in') n[k]+=q; });
   let co=0,cn=0; const P=days.map(k=>({k,o:(co+=o[k]),n:(cn+=n[k])}));
   const W=box.clientWidth||300,H=200,ml=40,mb=22,mt=24, max=niceStep(Math.max(4,co,cn)/4)*4;
   const X=i=>ml+(W-ml-8)*(days.length>1?i/(days.length-1):0.5), Y=v=>H-mb-(H-mb-mt)*v/max;
