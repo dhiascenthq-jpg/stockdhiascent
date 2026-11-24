@@ -18,5 +18,5 @@ window.DHIA_CONFIG = {
       "sabun-segak": "icons/produk/sabun-segak.jpg",
       "set-sinaran": "icons/produk/set-sinaran.jpg"
   },
-  API_URL: 'https://script.google.com/macros/s/AKfycbyKXESaFWPo9sKAB4jQTgNXCU60lHFrvLm5Zd1CDkk7gloYgXoy329jrTsfDKlBko_9/exec'
+  API_URL: 'https://script.google.com/macros/s/AKfycbzl7PR2XOfEqdde-q5OKPMXQygsfsimr1A57gCOIPbuuPWo7ZNEPihll4oUyonl8Dk4/exec'
 };
