@@ -130,6 +130,17 @@ input[type=date].input{min-width:0;-webkit-appearance:none;appearance:none;min-h
 @keyframes flash{0%{background:var(--gold2)}100%{background:transparent}}
 .item.flash{animation:flash 1.6s ease-out;border-radius:12px}
 .item .pimg{transition:transform .15s}.item.filled .pimg{transform:scale(1.08)}
+.req{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px}
+.req .rh{display:flex;align-items:flex-start;gap:8px}
+.req .rh b{flex:1;font-size:15px}
+.req .rm{font-size:12px;color:var(--muted);margin:2px 0 8px}
+.req .ri{display:flex;justify-content:space-between;gap:8px;font-size:14px;padding:5px 0;border-top:1px dashed #eee6da}
+.req .ra{display:flex;gap:8px;margin-top:10px}
+.req .ra .btn{padding:10px 6px;font-size:13px}
+.pill.new{background:#e8f0fb;color:#1f5fae}.pill.ord{background:var(--gold2);color:#7a5a14}.pill.done{background:var(--okbg);color:var(--ok)}.pill.cancel{background:#eee;color:#888}
+.ritem{display:grid;grid-template-columns:1fr 84px 84px;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid #f0ebe3}
+.ritem input{width:100%;padding:9px;border:1px solid var(--line);border-radius:10px;font-size:15px}
+.ritem .n{font-size:14px}.ritem .n span{display:block;font-size:11px;color:var(--muted)}
 .chips{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
 .chips button{flex:none;border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 14px;font-size:14px;color:var(--ink2)}
 .chips button.on{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:600}
@@ -262,6 +273,14 @@ input[type=date].input{min-width:0;-webkit-appearance:none;appearance:none;min-h
       <p class="muted center" id="bakiNote"></p>
     </section>
 
+    <!-- BELI / REQUEST -->
+    <section id="tab-beli" class="hidden">
+      <button class="btn gold" id="newReqBtn">+ Request beli baru</button>
+      <div style="height:12px"></div>
+      <div class="seg" id="reqSeg"><button data-v="open" class="on">Belum diterima</button><button data-v="all">Semua</button></div>
+      <div id="reqList"><p class="muted center">Memuatkan…</p></div>
+    </section>
+
     <!-- SEJARAH -->
     <section id="tab-sejarah" class="hidden">
       <h2>Rekod terkini</h2>
@@ -308,6 +327,7 @@ input[type=date].input{min-width:0;-webkit-appearance:none;appearance:none;min-h
     <button data-t="dash" id="dashTabBtn" class="hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Dashboard</button>
     <button data-t="rekod" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Rekod</button>
     <button data-t="baki"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>Baki</button>
+    <button data-t="beli"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 8H6"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>Beli</button>
     <button data-t="sejarah"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Sejarah</button>
     <button data-t="lagi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>Lagi</button>
   </nav>
@@ -347,7 +367,7 @@ const STEPS = [
   {k:'Guna bahan',  t:'Guna bahan',   s:'Rosak / packing', kind:'bahan',
    hint:'Untuk bahan rosak dan bahan packing (flyers, parcel, cellotape). Fridge magnet untuk Set Sinaran ditolak automatik.'},
   {k:'Terima bahan',t:'Terima bahan', s:'Barang dari supplier', kind:'bahan',
-   hint:'Rekod setiap kali bahan baru sampai supaya baki bahan betul.'}
+   hint:'Rekod setiap kali bahan baru sampai. Kalau ada Request, guna tab Beli → Terima barang. Pati & minyak dalam ml: 5 kg = 5000.'}
 ];
 
 let D = store.get('data', null);
@@ -516,6 +536,86 @@ function renderLog(){
   $('#logList').innerHTML=(D.recent||[]).map(r=>`<div class="log"><div class="d"><b>${esc(r.name)}</b>
     <span><span class="tag">${esc(r.step)}</span>${esc(r.date)} · ${esc(r.by)}${r.note?' · '+esc(r.note):''}</span></div>
     <div class="q">${fmt(r.qty)}</div></div>`).join('')||'<p class="muted center">Tiada rekod</p>';
+}
+
+// ---------------------------------------------------------- request beli
+let REQS=null, reqView='open';
+const reqPill=s=>s==='Sudah diterima'?'done':s==='Dipesan'?'ord':s==='Batal'?'cancel':'new';
+async function loadReqs(){
+  try{ const j=await call('requests'); REQS=j.requests||[]; renderReqs(); }
+  catch(e){ $('#reqList').innerHTML=`<p class="muted center">${esc(/tidak dikenali/i.test(e.message)?'Ciri Request perlukan Apps Script versi baru. Minta admin deploy semula.':e.message)}</p>`; }
+}
+function renderReqs(){
+  $$('#reqSeg button').forEach(b=>b.classList.toggle('on',b.dataset.v===reqView));
+  const L=(REQS||[]).filter(r=>reqView==='all'||(r.status!=='Sudah diterima'&&r.status!=='Batal'));
+  if(!L.length){ $('#reqList').innerHTML='<p class="muted center">Tiada request '+(reqView==='open'?'yang belum diterima':'')+'.</p>'; return; }
+  $('#reqList').innerHTML=L.map(r=>{
+    const tot=r.items.reduce((a,i)=>a+(i.price||0),0), open=r.status!=='Sudah diterima'&&r.status!=='Batal';
+    return `<div class="req" data-id="${esc(r.id)}">
+      <div class="rh"><b>${esc(r.supplier||'—')}</b><span class="pill ${reqPill(r.status)}">${esc(r.status||'Baru')}</span></div>
+      <div class="rm">${esc(r.id)} · ${esc(r.by)}${r.need?' · perlu '+esc(r.need):''}${r.priority==='Segera'?' · <b style="color:var(--bad)">SEGERA</b>':''}${r.note?' · '+esc(r.note):''}</div>
+      ${r.items.map(i=>`<div class="ri"><span>${esc(i.name)}</span><b>${fmt(i.qty)} ${esc(i.unit)}${i.price?' · RM'+fmt(i.price):''}</b></div>`).join('')}
+      ${tot?`<div class="ri"><span class="muted">Jumlah anggaran</span><b>RM${fmt(tot)}</b></div>`:''}
+      ${r.statusBy?`<div class="rm" style="margin:6px 0 0">${esc(r.status)} oleh ${esc(r.statusBy)} · ${esc(r.statusTime)}</div>`:''}
+      ${open?`<div class="ra">${r.status!=='Dipesan'?'<button class="btn ghost" data-act="Dipesan">Dah pesan</button>':''}<button class="btn" data-act="terima">Terima barang</button><button class="btn ghost" data-act="Batal">Batal</button></div>`:''}
+    </div>`;}).join('');
+  $$('#reqList .req [data-act]').forEach(b=>b.onclick=()=>{
+    const r=REQS.find(x=>x.id===b.closest('.req').dataset.id); const a=b.dataset.act;
+    if(a==='terima') receiveSheet(r); else reqStatus(r,a);
+  });
+}
+async function reqStatus(r,status,extra){
+  if(status==='Batal'&&!confirm('Batalkan request '+r.id+'?')) return;
+  try{
+    const j=await call('reqstatus',Object.assign({reqId:r.id,status,by:$('#by').value||store.get('me',''),key:(crypto.randomUUID?crypto.randomUUID():String(Date.now()))},extra||{}));
+    toast(status==='Sudah diterima'?`✓ ${j.result.received} bahan direkod sebagai Terima bahan`:'✓ Status: '+status);
+    $('#modal').classList.add('hidden'); loadReqs(); load(true);
+  }catch(e){ toast(e.message,true); }
+}
+function receiveSheet(r){
+  $('#sheet').innerHTML=`<h2>Terima barang</h2><p class="muted" style="margin-top:-6px">${esc(r.supplier)} · ${esc(r.id)}</p>
+    <label class="f">Tarikh barang sampai</label><input id="rcvDate" type="date" class="input" value="${today()}">
+    <p class="muted">Isi kuantiti <b>sebenar</b> yang sampai. Kosongkan jika tiada.</p>
+    ${r.items.map(i=>{ const b=(D.bahan||[]).find(x=>x.id===i.id)||{}; return `<div class="ritem" style="grid-template-columns:1fr 110px"><div class="n">${esc(i.name)}<span>Minta ${fmt(i.qty)} ${esc(i.unit)}${/ml/i.test(i.unit)?' · 1 kg = 1,000 ml':''}</span></div>
+      <input type="number" inputmode="decimal" data-rid="${esc(i.id)}" value="${esc(i.qty)}"></div>`; }).join('')}
+    <div id="rcvWarn"></div><div style="height:12px"></div>
+    <button class="btn" id="rcvBtn">Sahkan diterima</button><div style="height:8px"></div><button class="btn ghost" id="cancelBtn">Kembali</button>`;
+  $('#modal').classList.remove('hidden');
+  const chk=()=>{ const bad=r.items.filter(i=>/ml/i.test(i.unit)&&Number(($(`#sheet input[data-rid="${CSS.escape(i.id)}"]`)||{}).value)<50);
+    $('#rcvWarn').innerHTML=bad.length?'<div class="hint warn">Pati/minyak dalam <b>ml</b>. Kalau terima 5 kg, isi <b>5000</b>, bukan 5.</div>':''; };
+  $$('#sheet input[data-rid]').forEach(x=>x.oninput=chk); chk();
+  $('#cancelBtn').onclick=()=>$('#modal').classList.add('hidden');
+  $('#rcvBtn').onclick=()=>{ const items=$$('#sheet input[data-rid]').map(x=>({id:x.dataset.rid,qty:Number(x.value)})).filter(x=>x.qty>0);
+    if(!items.length){ toast('Isi sekurang-kurangnya satu kuantiti',true); return; }
+    $('#rcvBtn').disabled=true; $('#rcvBtn').innerHTML='<span class="spin"></span>Menyimpan…';
+    reqStatus(r,'Sudah diterima',{date:$('#rcvDate').value,items}).finally(()=>{ const b=$('#rcvBtn'); if(b){ b.disabled=false; b.textContent='Sahkan diterima'; } }); };
+}
+function newReqSheet(){
+  const sups=[...new Set((REQS||[]).map(r=>r.supplier).filter(Boolean))];
+  const bahan=(D.bahan||[]).filter(b=>!/tidak (dipakai|digunakan)|belum guna/i.test(b.name));
+  const nd=new Date(); nd.setDate(nd.getDate()+3); const need=new Date(nd.getTime()-nd.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+  $('#sheet').innerHTML=`<h2>Request beli baru</h2>
+    <label class="f">Supplier</label><input id="rqSup" class="input" list="supList" placeholder="Nama supplier"><datalist id="supList">${sups.map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
+    <div class="row" style="margin-top:10px"><div><label class="f">Perlu sebelum</label><input id="rqNeed" type="date" class="input" value="${need}"></div>
+      <div><label class="f">Keutamaan</label><select id="rqPri" class="input"><option>Biasa</option><option>Segera</option></select></div></div>
+    <label class="f" style="margin-top:10px">Nota</label><input id="rqNote" class="input" placeholder="cth: stok tinggal 3 hari">
+    <h3>Item <span style="text-transform:none;letter-spacing:0">· kuantiti & anggaran RM</span></h3>
+    <input id="rqSearch" class="input" placeholder="Cari bahan…" style="margin-bottom:6px">
+    <div id="rqItems">${bahan.map(b=>`<div class="ritem" data-n="${esc(b.name.toLowerCase())}"><div class="n">${esc(b.name)}<span>Baki ${fmt(b.baki)} ${esc(b.unit||'')}${b.status==='PERLU BELI'?' · <b style="color:var(--warn)">perlu beli</b>':''}</span></div>
+      <input type="number" inputmode="decimal" data-q="${esc(b.id)}" placeholder="${/ml/i.test(b.unit)?'ml':'kuantiti'}"><input type="number" inputmode="decimal" data-p="${esc(b.id)}" placeholder="RM"></div>`).join('')}</div>
+    <div style="height:12px"></div><button class="btn" id="rqBtn">Hantar request</button><div style="height:8px"></div><button class="btn ghost" id="cancelBtn">Kembali</button>`;
+  $('#modal').classList.remove('hidden');
+  $('#rqSearch').oninput=()=>{ const q=$('#rqSearch').value.toLowerCase(); $$('#rqItems .ritem').forEach(x=>x.classList.toggle('hidden',!!q&&!x.dataset.n.includes(q))); };
+  $('#cancelBtn').onclick=()=>$('#modal').classList.add('hidden');
+  $('#rqBtn').onclick=async()=>{
+    const items=$$('#rqItems input[data-q]').map(x=>({id:x.dataset.q,qty:Number(x.value),price:Number(($(`#rqItems input[data-p="${CSS.escape(x.dataset.q)}"]`)||{}).value)||0})).filter(x=>x.qty>0);
+    if(!$('#rqSup').value.trim()){ toast('Isi nama supplier',true); return; }
+    if(!items.length){ toast('Isi kuantiti sekurang-kurangnya satu item',true); return; }
+    const b=$('#rqBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span>Menghantar…';
+    try{ const j=await call('request',{by:$('#by').value||store.get('me',''),supplier:$('#rqSup').value.trim(),need:$('#rqNeed').value,priority:$('#rqPri').value,note:$('#rqNote').value,items,key:(crypto.randomUUID?crypto.randomUUID():String(Date.now()))});
+      $('#modal').classList.add('hidden'); toast('✓ Request '+(j.result.id||'')+' dihantar'); reqView='open'; loadReqs(); }
+    catch(e){ toast(e.message,true); b.disabled=false; b.textContent='Hantar request'; }
+  };
 }
 
 // ---------------------------------------------------------- produk: butiran & rekod pantas
@@ -823,9 +923,10 @@ function drawProd(R){
 // ---------------------------------------------------------- wiring
 function tab(t){
   $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
-  ['dash','rekod','baki','sejarah','lagi'].forEach(x=>$('#tab-'+x).classList.toggle('hidden',x!==t));
+  ['dash','rekod','baki','beli','sejarah','lagi'].forEach(x=>$('#tab-'+x).classList.toggle('hidden',x!==t));
   window.scrollTo(0,0);
   if(t==='dash') loadDash();
+  if(t==='beli') loadReqs();
 }
 $$('#tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.t));
 $$('#bakiSeg button').forEach(b=>b.onclick=()=>{bakiView=b.dataset.v; renderBaki();});
@@ -838,6 +939,8 @@ $('#pin').onkeydown=e=>{ if(e.key==='Enter') tryPin(); };
 $('#switchUser').onclick=()=>{ store.del('me'); store.del('adminPin'); setAdminUI(); tab('rekod'); pickWho(); };
 $('#logout').onclick=logout;
 $('#adminBtn').onclick=adminLogin;
+$('#newReqBtn').onclick=()=>{ if(!D){ toast('Tunggu data dimuatkan',true); return; } newReqSheet(); };
+$$('#reqSeg button').forEach(b=>b.onclick=()=>{ reqView=b.dataset.v; renderReqs(); });
 $$('#dashQuick button').forEach(b=>b.onclick=()=>quick(+b.dataset.q));
 ['#dashFrom','#dashTo'].forEach(id=>$(id).onchange=()=>{ $$('#dashQuick button').forEach(b=>b.classList.remove('on')); if($('#dashFrom').value&&$('#dashTo').value) loadDash(); });
 $('#dayClose').onclick=()=>{ dashSel=null; if(DASH){ drawDaily(DASH.rows||[]); renderDay(); } };

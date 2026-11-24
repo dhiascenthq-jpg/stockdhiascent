@@ -41,6 +41,9 @@ function handle_(p) {
       case 'ping':   return json_({ ok: true });
       case 'data':   return json_({ ok: true, data: getData_() });
       case 'record': return json_({ ok: true, result: record_(p) });
+      case 'requests': return json_({ ok: true, requests: getRequests_() });
+      case 'request':  return json_({ ok: true, result: createRequest_(p) });
+      case 'reqstatus':return json_({ ok: true, result: setReqStatus_(p) });
       case 'admin':  checkAdmin_(p.adminPin); return json_({ ok: true });
       case 'dash':   checkAdmin_(p.adminPin); return json_({ ok: true, dash: getDash_(p) });
       default:       throw new Error('Action tidak dikenali');
@@ -239,6 +242,116 @@ function record_(p) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ---------------------------------------------------------------- request (permintaan beli)
+// Tab Request: A ID, B Masa, C Tarikh perlu, D ID bahan, E Nama, F Kuantiti, G Unit, H Anggaran RM,
+//              I Supplier, J Keutamaan, K Status, L Diminta oleh, M Nota, N Status oleh, O Masa status
+function getRequests_() {
+  const sh = ss_().getSheetByName('Request');
+  const last = sh.getLastRow();
+  if (last < 2) return [];
+  const v = sh.getRange(2, 1, last - 1, 15).getValues();
+  const map = {}, order = [];
+  v.forEach((r, i) => {
+    if (!r[0]) return;
+    const id = String(r[0]);
+    if (!map[id]) {
+      map[id] = { id: id, time: r[1] instanceof Date ? Utilities.formatDate(r[1], TZ, 'yyyy-MM-dd HH:mm') : String(r[1]),
+        need: fmtDate_(r[2]), supplier: String(r[8] || ''), priority: String(r[9] || ''), status: String(r[10] || ''),
+        by: String(r[11] || ''), note: String(r[12] || ''), statusBy: String(r[13] || ''),
+        statusTime: r[14] instanceof Date ? Utilities.formatDate(r[14], TZ, 'yyyy-MM-dd HH:mm') : String(r[14] || ''), items: [] };
+      order.push(id);
+    }
+    map[id].items.push({ row: i + 2, id: String(r[3]), name: String(r[4]), qty: num_(r[5]), unit: String(r[6] || ''), price: num_(r[7]) });
+  });
+  return order.reverse().slice(0, 80).map(id => map[id]);
+}
+
+function createRequest_(p) {
+  const by = String(p.by || '').trim(); if (!by) throw new Error('Pilih nama staf dulu');
+  const supplier = String(p.supplier || '').trim(); if (!supplier) throw new Error('Isi nama supplier');
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(p.need || ''));
+  const need = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : '';
+  const items = (p.items || []).map(i => ({ id: String(i.id), qty: Number(i.qty), price: Number(i.price) || 0 })).filter(i => i.id && i.qty > 0);
+  if (!items.length) throw new Error('Tiada item diisi');
+  const cache = CacheService.getScriptCache();
+  if (p.key && cache.get('k_' + p.key)) return { duplicate: true };
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    const ss = ss_(), bh = ss.getSheetByName('Bahan'), sh = ss.getSheetByName('Request');
+    const list = bh.getRange(2, 1, Math.max(bh.getLastRow() - 1, 1), 4).getValues();
+    const now = new Date();
+    const id = 'REQ-' + Utilities.formatDate(now, TZ, 'yyMMdd-HHmmss');
+    const rows = items.map(it => {
+      const b = list.find(x => x[0] === it.id); if (!b) throw new Error('Bahan tidak dijumpai: ' + it.id);
+      return [id, now, need, it.id, b[1], it.qty, b[3], it.price || '', supplier, p.priority === 'Segera' ? 'Segera' : 'Biasa', 'Baru', by, String(p.note || '').slice(0, 300), '', ''];
+    });
+    const start = sh.getLastRow() + 1;
+    sh.getRange(start, 1, rows.length, 15).setValues(rows);
+    sh.getRange(start, 2, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+    sh.getRange(start, 3, rows.length, 1).setNumberFormat('yyyy-mm-dd');
+    if (p.key) cache.put('k_' + p.key, '1', 21600);
+    notifyRequest_(id, rows, by, supplier);
+    return { id: id, rows: rows.length };
+  } finally { lock.releaseLock(); }
+}
+
+function notifyRequest_(id, rows, by, supplier) {
+  try {
+    const t = ss_().getSheetByName('Tetapan').getRange('A1:B20').getDisplayValues();
+    const r = t.find(x => /e-?mel/i.test(x[0]));
+    const to = r ? String(r[1]).trim() : '';
+    if (!to) return;
+    const lines = rows.map(x => '- ' + x[4] + ': ' + x[5] + ' ' + x[6] + (x[7] ? ' (RM' + x[7] + ')' : '')).join('\n');
+    MailApp.sendEmail(to, 'Request beli ' + id + ' · ' + supplier, 'Diminta oleh: ' + by + '\nSupplier: ' + supplier + '\n\n' + lines);
+  } catch (e) { /* e-mel gagal tidak menghalang request */ }
+}
+
+// status: Dipesan | Batal | Sudah diterima (dengan items diterima -> Terima bahan di Rekod)
+function setReqStatus_(p) {
+  const reqId = String(p.reqId || ''), status = String(p.status || ''), by = String(p.by || '').trim();
+  if (!reqId) throw new Error('ID request tiada');
+  if (['Baru', 'Dipesan', 'Batal', 'Sudah diterima'].indexOf(status) < 0) throw new Error('Status tidak sah');
+  if (!by) throw new Error('Pilih nama staf dulu');
+  const cache = CacheService.getScriptCache();
+  if (p.key && cache.get('k_' + p.key)) return { duplicate: true };
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    const ss = ss_(), sh = ss.getSheetByName('Request');
+    const v = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 15).getValues();
+    const idx = []; v.forEach((r, i) => { if (String(r[0]) === reqId) idx.push(i); });
+    if (!idx.length) throw new Error('Request tidak dijumpai');
+    if (v[idx[0]][10] === 'Sudah diterima' && status === 'Sudah diterima') throw new Error('Request ini sudah ditanda diterima');
+    const now = new Date();
+    let added = 0;
+    if (status === 'Sudah diterima') {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(p.date || ''));
+      if (!m) throw new Error('Tarikh terima tidak sah');
+      const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      const got = {}; (p.items || []).forEach(i => { got[String(i.id)] = Number(i.qty); });
+      const rows = [];
+      idx.forEach(i => {
+        const r = v[i], q = got[r[3]];
+        if (!(q > 0)) return;
+        const ordered = Number(r[5]) || 0, price = Number(r[7]) || 0;
+        const cost = ordered && price ? Math.round(price * q / ordered * 100) / 100 : '';
+        rows.push([now, date, 'Terima bahan', r[3], r[4], q, cost, by + ' (app)', 'Dari ' + reqId + ' · ' + r[8] + (q !== ordered ? ' · minta ' + ordered : '')]);
+      });
+      if (rows.length) {
+        const rk = ss.getSheetByName('Rekod'), start = rk.getLastRow() + 1;
+        rk.getRange(start, 1, rows.length, 9).setValues(rows);
+        rk.getRange(start, 1, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+        rk.getRange(start, 2, rows.length, 1).setNumberFormat('yyyy-mm-dd');
+        added = rows.length;
+      }
+    }
+    idx.forEach(i => sh.getRange(i + 2, 11, 1, 1).setValue(status));
+    idx.forEach(i => sh.getRange(i + 2, 14, 1, 2).setValues([[by, now]]));
+    SpreadsheetApp.flush();
+    if (p.key) cache.put('k_' + p.key, '1', 21600);
+    return { status: status, received: added };
+  } finally { lock.releaseLock(); }
 }
 
 // Jalankan sekali dari editor untuk beri kebenaran & semak sambungan
