@@ -539,14 +539,16 @@ function renderLog(){
 }
 
 // ---------------------------------------------------------- request beli
-let REQS=null, reqView='open';
+let REQS=null, reqView='open', REQERR='';
 const reqPill=s=>s==='Sudah diterima'?'done':s==='Dipesan'?'ord':s==='Batal'?'cancel':'new';
 async function loadReqs(){
-  try{ const j=await call('requests'); REQS=j.requests||[]; renderReqs(); }
-  catch(e){ $('#reqList').innerHTML=`<p class="muted center">${esc(/tidak dikenali/i.test(e.message)?'Ciri Request perlukan Apps Script versi baru. Minta admin deploy semula.':e.message)}</p>`; }
+  try{ const j=await call('requests'); REQS=j.requests||[]; REQERR=''; renderReqs(); }
+  catch(e){ REQS=null; REQERR=/tidak dikenali/i.test(e.message)?'Ciri Request perlukan Apps Script versi baru. Minta admin deploy semula.':e.message; renderReqs(); }
 }
 function renderReqs(){
   $$('#reqSeg button').forEach(b=>b.classList.toggle('on',b.dataset.v===reqView));
+  if(REQERR){ $('#reqList').innerHTML=`<p class="muted center">${esc(REQERR)}</p>`; return; }
+  if(REQS===null){ $('#reqList').innerHTML='<p class="muted center">Memuatkan…</p>'; return; }
   const L=(REQS||[]).filter(r=>reqView==='all'||(r.status!=='Sudah diterima'&&r.status!=='Batal'));
   if(!L.length){ $('#reqList').innerHTML='<p class="muted center">Tiada request '+(reqView==='open'?'yang belum diterima':'')+'.</p>'; return; }
   $('#reqList').innerHTML=L.map(r=>{
