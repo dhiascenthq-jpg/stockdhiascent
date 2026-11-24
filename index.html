@@ -663,6 +663,8 @@ function review(){
   const isOrd=id=>/ikut order/i.test(((D.produk||[]).find(p=>p.id===id)||{}).group||'');
   if(step.k==='Stock out' && rows.some(r=>!isOrd(r.id) && r.baki!=null && r.qty>r.baki))
     warn='<div class="hint warn">Ada item yang stock out lebih dari baki app. Semak semula kuantiti.</div>';
+  if((step.k==='Terima bahan'||step.k==='Guna bahan'||step.k==='Kira stok') && rows.some(r=>{ const b=(D.bahan||[]).find(x=>x.id===r.id); return b&&/ml/i.test(b.unit)&&r.qty>0&&r.qty<50; }))
+    warn+='<div class="hint warn"><b>Semak unit!</b> Pati & minyak dikira dalam <b>ml</b>. 10 kg = <b>10000</b>, bukan 10.</div>';
   const kk5=rows.find(r=>r.id==='kk-5in1');
   if(step.k==='Stock out' && kk5)
     warn+=`<div class="hint">KK 5 in 1 ×${fmt(kk5.qty)}: app akan tolak ${fmt(kk5.qty*5)} botol Kasturi Kijang &amp; ${fmt(kk5.qty)} Kotak K.Kijang.</div>`;
